@@ -1,3 +1,4 @@
 {
-    "count_replica":4
+    "count_replica":4,
+    "port":8080
 }
