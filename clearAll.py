@@ -16,4 +16,6 @@ def delete_servers():
         path = './NODE'+str(i)
         shutil.rmtree(path)
 
-delete_servers()
+
+if __name__ == "__main__":
+    delete_servers()

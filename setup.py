@@ -3,6 +3,13 @@ import json
 from re import L
 import shutil
 
+from click import command
+from clearAll import *
+import multiprocessing as mp
+
+
+
+
 configFile = open('config.json')
 config = json.load(configFile)
 
@@ -46,8 +53,10 @@ def create_json_config(path,head,tail,port):
 def SETUP():
     for i in range(count_replica):
         path = './NODE'+str(i)
+        if os.path.exists(path):
+            delete_servers()
         os.mkdir(path)
-        jsonFile = path+'/config.json'
+        jsonFile = path+'/serverConfig.json'
         if i==0:
             create_json_config(jsonFile,True,False,PORT+i)
         elif i==count_replica-1 :
@@ -59,14 +68,28 @@ def SETUP():
         shutil.copy(SRC,DEST)
 
 
+
+
+def RUNSERVER(command):
+    os.system(command)
+
 def START():
     print('started')
+    servers = []
     for i in range(count_replica):
         dir = './NODE'+str(i)
         if os.path.exists(dir):
             COMMAND = "python3 "+dir+"/server.py"
-            os.system(COMMAND)
-
+            servers.append(COMMAND)
+        
+    allprocess = [mp.Process(target=RUNSERVER,args=(command,)) for command in servers]
+    for process in allprocess:
+        process.start()
+  
+    
+        
+   
+        
 
 
 if __name__ == "__main__":
