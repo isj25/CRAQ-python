@@ -5,7 +5,7 @@ import json
 import shutil
 
 HEADER = 16
-PORT = 5051
+PORT = 5052
 SERVER_IP = "192.168.1.12"
 #SERVER_IP = socket.gethostbyname(socket.gethostname())
 # gw = os.popen("ip -4 route show default").read().split()
@@ -48,9 +48,9 @@ def write_data(data):
     key = data.partition("\n")[0]
     value = "\n".join(data.split("\n")[1:])
     print(f"We are writing files. Key:{key}, Value:{value}")
-    ADDRESS1 = (SERVER_IP, 5053)
+    ADDRESS1 = (SERVER_IP, 5054)
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.bind(('192.168.1.12',5060))
+    client.bind(('192.168.1.12',5051))
     client.connect(ADDRESS1)
 
     message = data.encode(FORMAT)
@@ -59,6 +59,7 @@ def write_data(data):
     send_length += b' ' * (HEADER - len(send_length))
     client.send(send_length)
     client.send(message)
+    client.close()
 
 def read_data(key):
     print("We are reading files. Key:{key}")
