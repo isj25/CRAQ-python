@@ -8,6 +8,7 @@ FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 SUCCESSOR = 1
 PREDECESSOR = 0
+NODE_FAILURE = 2
 
 config_file = open("config.json","r+")
 config = json.load(config_file)
@@ -38,10 +39,14 @@ def update_key_value_status(key):
     all_data[key]["status"] = "clean"
     data_file.seek(0)
     data_file.truncate(0)
-    json.dump(all_data, data_file, indent=4)
+    json.dump(all_data, data_file, indent=4)        
 
-def send_data_to_node(next, data):
-    if next and config["successor"] != "NULL":
+def send_data_to_node(successor, data):
+    global config
+    print("successor port",config["successor_port"][1])
+    time.sleep(45)
+    node_failed = 0
+    if successor and config["successor"] != "NULL":
         dest_address = (SERVER_IP, config["successor_port"][1])
     else:
         if config["successor"] == "NULL":
@@ -50,7 +55,25 @@ def send_data_to_node(next, data):
 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.bind((SERVER_IP, config["cur_port"][0]))
-    client.connect(dest_address)
+    try:
+        original_dest_address = dest_address
+        client.connect(dest_address)
+    except Exception:
+        print("Node Failure")
+        coordinator_port = config["coordinator_port"][1]
+        dest_address = (SERVER_IP, coordinator_port)
+        client.connect(dest_address)
+        indication_bit = str(NODE_FAILURE).encode(FORMAT)
+        indication_bit += b' ' * (1 - len(indication_bit))    #extend to 1 byte
+        client.send(indication_bit)
+        if successor:
+            failed_port = config["successor_port"][1]
+        else:
+            failed_port = config["predecessor_port"][1]
+        node_failed = 1
+        original_data = data
+        data = str(failed_port)
+
     message = data.encode(FORMAT)
     msg_length = len(message)
     send_length = str(msg_length).encode(FORMAT)
@@ -58,11 +81,20 @@ def send_data_to_node(next, data):
     client.send(send_length)
     client.send(message)
     client.close()
-    time.sleep(91)
+    if node_failed:
+        print("System recovered")
+        time.sleep(46)
+        new_config_file = open("config.json","r+")
+        config = json.load(new_config_file)
+        send_data_to_node(successor, original_data)
 
 def handle_request(connection, address):
+    global config
     print(f"{address} connected")
     connected_port = address[1]
+
+    new_config_file = open("config.json","r+")
+    config = json.load(new_config_file)
 
     connected = True
     while connected:
@@ -72,16 +104,6 @@ def handle_request(connection, address):
             received_data = connection.recv(msg_length).decode(FORMAT)
             #connection.send("Write Successful".encode(FORMAT))
             connected = False
-
-    if (threading.activeCount() - 1) > 1:
-        print("busy")
-        if config["predecessor"] == "NULL":            
-            read_value = "port " + str(-1)
-        else:
-            read_value = "port " + str(config["predecessor_port"][1])
-        connection.send(read_value.encode(FORMAT))
-        connection.close()
-        return
 
     if connected_port == config["coordinator_port"][0] or connected_port == config["predecessor_port"][0]:
         connection.close()
@@ -93,13 +115,21 @@ def handle_request(connection, address):
         connection.close()
         print("Received ACK")
         update_key_value_status(received_data)
-        send_data_to_node(PREDECESSOR, received_data)
+        if config["predecessor"] != "NULL":
+            send_data_to_node(PREDECESSOR, received_data)
     else:
         print(received_data)
-        with open("data.json","r") as data_file:
-            all_data = json.load(data_file)
-            read_value = "value " + all_data[received_data]["data"]
-        time.sleep(5)
+        if (threading.activeCount() - 1) > 1:
+            print("Node is busy")
+            if config["predecessor"] == "NULL":            
+                read_value = "port " + str(-1)
+            else:
+                read_value = "port " + str(config["predecessor_port"][1])
+        else:
+            with open("data.json","r") as data_file:
+                all_data = json.load(data_file)
+                read_value = "value " + all_data[received_data]["data"]
+            time.sleep(15)
         connection.send(read_value.encode(FORMAT))
         connection.close()
 
@@ -109,6 +139,7 @@ def start():
         conn, addr = server.accept()
         thread = threading.Thread(target=handle_request, args=(conn,addr))
         thread.start()
+        time.sleep(3)
         #print(f"Active Connections: {threading.activeCount() - 1}")
         #handle_request(conn, addr)
 
