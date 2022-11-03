@@ -9,6 +9,28 @@ DISCONNECT_MESSAGE = "!DISCONNECT"
 READ = 0
 WRITE = 1
 
+def contact_node(port, key):
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    node_address = (SERVER_IP, port)
+    client.connect(node_address)
+
+    message = key.encode(FORMAT)
+    msg_length = len(message)
+    send_length = str(msg_length).encode(FORMAT)
+    send_length += b' ' * (HEADER - len(send_length))   #extend to 16 bytes
+    client.send(send_length)
+    client.send(message)
+    received_data = client.recv(256).decode(FORMAT).split(" ")
+    client.close()
+    if received_data[0] == "value":
+        print("Value: ", "".join(received_data[1:]))
+    elif received_data[0] == "port":
+        port = int(received_data[1])
+        if port == -1:
+            print("Read Failed")
+        else:
+            contact_node(port, key)
+
 def send_data(choice, data):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDRESS)
@@ -23,10 +45,19 @@ def send_data(choice, data):
     send_length += b' ' * (HEADER - len(send_length))   #extend to 16 bytes
     client.send(send_length)
     client.send(message)
-    print(client.recv(2048).decode(FORMAT))
+    if choice == READ:
+        port = client.recv(16).decode(FORMAT)
+        try:
+            port = int(port)
+        except Exception:
+            print("Read Failed")
+        client.close()
+        print(port)
+        contact_node(port, data)
+    client.close()
     
 if __name__ == "__main__":
-    print("\n","*"*30,"Chain Replication of Apportionated Queries","*"*30,"\n")
+    print("\n","*"*30,"Chain Replication with Apportioned Queries","*"*30,"\n")
     print("Type 'help' for lisitng all the available commands\n")
     command = ""
 
