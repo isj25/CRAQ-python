@@ -1,6 +1,7 @@
 import socket
 import json
 import time
+import threading
 
 HEADER = 16
 FORMAT = 'utf-8'
@@ -45,8 +46,6 @@ def send_data_to_node(next, data):
     else:
         if config["successor"] == "NULL":
             data = data.partition("\n")[0]
-        if config["predecessor"] == "NULL":
-            return
         dest_address = (SERVER_IP, config["predecessor_port"][1])
 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -73,25 +72,45 @@ def handle_request(connection, address):
             received_data = connection.recv(msg_length).decode(FORMAT)
             #connection.send("Write Successful".encode(FORMAT))
             connected = False
-    connection.close()
+
+    if (threading.activeCount() - 1) > 1:
+        print("busy")
+        if config["predecessor"] == "NULL":            
+            read_value = "port " + str(-1)
+        else:
+            read_value = "port " + str(config["predecessor_port"][1])
+        connection.send(read_value.encode(FORMAT))
+        connection.close()
+        return
 
     if connected_port == config["coordinator_port"][0] or connected_port == config["predecessor_port"][0]:
+        connection.close()
         print("Received write request")
         write_data(received_data)
         send_data_to_node(SUCCESSOR, received_data)
 
     elif connected_port == config["successor_port"][0]:
+        connection.close()
         print("Received ACK")
         update_key_value_status(received_data)
         send_data_to_node(PREDECESSOR, received_data)
     else:
-        pass
+        print(received_data)
+        with open("data.json","r") as data_file:
+            all_data = json.load(data_file)
+            read_value = "value " + all_data[received_data]["data"]
+        time.sleep(5)
+        connection.send(read_value.encode(FORMAT))
+        connection.close()
 
 def start():
     server.listen()
     while True:
         conn, addr = server.accept()
-        handle_request(conn, addr)
+        thread = threading.Thread(target=handle_request, args=(conn,addr))
+        thread.start()
+        #print(f"Active Connections: {threading.activeCount() - 1}")
+        #handle_request(conn, addr)
 
 if __name__ == "__main__":
     start()
