@@ -1,0 +1,10 @@
+{
+    "qwe": {
+        "data": "klo",
+        "status": "clean"
+    },
+    "xyz": {
+        "data": "njk",
+        "status": "dirty"
+    }
+}

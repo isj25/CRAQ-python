@@ -1,0 +1,9 @@
+{
+    "predecessor": "NULL",
+    "successor": "NODE2",
+    "coordinator": "Coordinator",
+    "predecessor_port": [-1, -1],
+    "successor_port": [5055, 5056],
+    "coordinator_port": [5051, 5052],
+    "cur_port":[5053,5054]
+}
