@@ -19,6 +19,8 @@ ADDRESS = (SERVER_IP, PORT)
 FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 READ = 0
+WRITE = 1
+NODE_FAILURE = 2
 
 config_file = open("./Coordinator_config.json","r+")
 config = json.load(config_file)
@@ -61,26 +63,94 @@ def write_data(data):
     client.send(message)
     client.close()
 
-def read_data(key):
-    print("We are reading files. Key:{key}")
+def handle_node_failure(failed_port):
+    global head_node
+    global tail_node
+    global config
+    global no_of_nodes
+
+    ports = config["ports"]
+    index = 0
+    for src_dst_port in ports:
+        if src_dst_port[1] == failed_port:
+            break
+        index += 1
+
+    if index == 0:
+        head_node = config["nodes_list"][index+1]
+        config["head_node"] = head_node
+        config["head_port"] = config["ports"][index+1]
+        with open("../" + head_node + "/config.json", "r+") as node_config_file:
+            node_config = json.load(node_config_file)
+            node_config["predecessor"] = "NULL"
+            node_config["predecessor_port"] = [-1, -1]
+            node_config_file.seek(0)
+            node_config_file.truncate(0)
+            json.dump(node_config, node_config_file, indent=4)
+
+    elif index == no_of_nodes - 1:
+        tail_node = config["nodes_list"][index - 1]
+        config["tail_node"] = tail_node
+        config["tail_port"] = config["ports"][index-1]
+        with open("../" + tail_node + "/config.json", "r+") as node_config_file:
+            node_config = json.load(node_config_file)
+            node_config["successor"] = "NULL"
+            node_config["successor_port"] = [-1, -1]
+            node_config_file.seek(0)
+            node_config_file.truncate(0)
+            json.dump(node_config, node_config_file, indent=4)
+
+    else:
+        prev_node = config["nodes_list"][index - 1]
+        next_node = config["nodes_list"][index + 1]
+        prev_port = config["ports"][index - 1]
+        next_port = config["ports"][index + 1]
+
+        with open("../" + prev_node + "/config.json", "r+") as node_config_file:
+            node_config = json.load(node_config_file)
+            node_config["successor"] = next_node
+            node_config["successor_port"] = next_port
+            node_config_file.seek(0)
+            node_config_file.truncate(0)
+            json.dump(node_config, node_config_file, indent=4)
+
+        with open("../" + next_node + "/config.json", "r+") as node_config_file:
+            node_config = json.load(node_config_file)
+            node_config["predecessor"] = prev_node
+            node_config["predecessor_port"] = prev_port
+            node_config_file.seek(0)
+            node_config_file.truncate(0)
+            json.dump(node_config, node_config_file, indent=4)
+
+    no_of_nodes -= 1
+    config["number_of_nodes"] -= 1
+    config["nodes_list"].pop(index)
+    config["ports"].pop(index)
+    config_file.seek(0)
+    config_file.truncate(0)
+    json.dump(config, config_file, indent=4)
 
 def handle_client(connection, address):
     print(f"Client with IP {address} connected")
     connected = True
     while connected:
-        read_write_choice = connection.recv(1).decode(FORMAT)
-        if read_write_choice:
-            read_write_choice = int(read_write_choice)
+        indication_bit = connection.recv(1).decode(FORMAT)
+        if indication_bit:
+            indication_bit = int(indication_bit)
             msg_length = int(connection.recv(HEADER).decode(FORMAT))
             received_data = connection.recv(msg_length).decode(FORMAT)
-            if read_write_choice == READ:
+            if indication_bit == READ:
                 print(f"Received read request from [{address}]")
-                connection.send("Received read request".encode(FORMAT))
-                read_data(received_data)
-            else:
+                #connection.send("Received read request".encode(FORMAT))
+                connection.send(str(config["tail_port"][1]).encode(FORMAT))
+            elif indication_bit == WRITE:
                 print(f"Received write request from [{address}]")
                 write_data(received_data)
-                connection.send("Write Successful".encode(FORMAT))
+                #connection.send("Write Successful".encode(FORMAT))
+            elif indication_bit == NODE_FAILURE:
+                failed_port = int(received_data)
+                print(f"NODE with port {failed_port} failed")
+                handle_node_failure(failed_port)
             connected = False
     print()
     connection.close()
