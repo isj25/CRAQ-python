@@ -1,18 +1,40 @@
 import socket
+import time
 
 HEADER = 16
 PORT = 5052
-SERVER_IP = "192.168.1.12"
+SERVER_IP = "192.168.92.84"
 ADDRESS = (SERVER_IP, PORT)
 FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 READ = 0
 WRITE = 1
+NODE_FAILURE = 2
 
 def contact_node(port, key):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     node_address = (SERVER_IP, port)
-    client.connect(node_address)
+    try:
+        client.connect(node_address)
+    except Exception:
+        print("Node failed, Recovering Node...")
+        time.sleep(5)
+        print("Please Retry your command")
+        node_address = (SERVER_IP, PORT)
+        client.connect(node_address)
+        indication_bit = str(NODE_FAILURE).encode(FORMAT)
+        indication_bit += b' ' * (1 - len(indication_bit))    #extend to 1 byte
+        client.send(indication_bit)
+        data = str(port)
+
+        message = data.encode(FORMAT)
+        msg_length = len(message)
+        send_length = str(msg_length).encode(FORMAT)
+        send_length += b' ' * (HEADER - len(send_length))
+        client.send(send_length)
+        client.send(message)
+        client.close()
+        return
 
     message = key.encode(FORMAT)
     msg_length = len(message)
