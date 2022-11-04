@@ -6,7 +6,7 @@ import shutil
 
 HEADER = 16
 PORT = 5052
-SERVER_IP = "192.168.1.12"
+SERVER_IP = "192.168.92.84"
 #SERVER_IP = socket.gethostbyname(socket.gethostname())
 # gw = os.popen("ip -4 route show default").read().split()
 # s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,9 +39,30 @@ def register_node():
     config["number_of_nodes"] += 1
     new_tail_node = "NODE" + str(no_of_nodes)
     shutil.copytree("../" + tail_node, "../" + new_tail_node)
+
+    with open("../"+tail_node+"/config.json", "r+") as node_config_file:
+        node_config = json.load(node_config_file)
+        node_config["successor"] = new_tail_node
+        new_tail_port = [node_config["cur_port"][0] + 2, node_config["cur_port"][1] + 2]
+        node_config["successor_port"] = new_tail_port
+        node_config_file.seek(0)
+        node_config_file.truncate(0)
+        json.dump(node_config, node_config_file, indent=4)
+
+    with open("../"+new_tail_node+"/config.json", "r+") as node_config_file:
+        node_config = json.load(node_config_file)
+        node_config["predecessor"] = tail_node
+        node_config["predecessor_port"] = config["tail_port"]
+        node_config["cur_port"] = new_tail_port
+        node_config_file.seek(0)
+        node_config_file.truncate(0)
+        json.dump(node_config, node_config_file, indent=4)
+
     config["tail_node"] = new_tail_node
     tail_node = new_tail_node
     config["nodes_list"].append(new_tail_node)
+    config["tail_port"] = new_tail_port
+    config["ports"].append(new_tail_port)
     config_file.seek(0)
     config_file.truncate(0)
     json.dump(config, config_file, indent=4)
@@ -52,7 +73,7 @@ def write_data(data):
     print(f"We are writing files. Key:{key}, Value:{value}")
     ADDRESS1 = (SERVER_IP, 5054)
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.bind(('192.168.1.12',5051))
+    client.bind((SERVER_IP,5051))
     client.connect(ADDRESS1)
 
     message = data.encode(FORMAT)
